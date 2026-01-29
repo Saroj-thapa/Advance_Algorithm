@@ -153,3 +153,17 @@ if __name__ == "__main__":
         print(f"Exponential is better: {dist1:.2f} < {dist2:.2f}")
     else:
         print(f"Linear is better: {dist2:.2f} < {dist1:.2f}")
+"""Created 20 cities
+First 3 cities: [(934.6841528376591, 982.2702676523938), (719.940406016339, 780.8666712880505), 
+(979.4673858738323, 476.9913838804449)]
+
+=== Test 1: Exponential Cooling ===
+Best distance found: 4626.94
+Tour order: [15, 4, 1, 0, 11, 19, 18, 16, 13, 8, 2, 12, 5, 10, 6, 17, 14, 3, 7, 9]
+
+=== Test 2: Linear Cooling ===
+Best distance found: 6132.48
+Tour order: [1, 10, 2, 12, 5, 13, 18, 19, 11, 6, 14, 17, 15, 4, 16, 0, 8, 9, 7, 3]
+
+=== Comparison ===
+Exponential is better: 4626.94 < 6132.48"""

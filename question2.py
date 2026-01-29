@@ -68,4 +68,6 @@ def max_points(tile_multipliers):
 
 # Test cases from the assignment
 print(max_points([3, 1, 5, 8]))  
-print(max_points([1, 5]))        
+print(max_points([1, 5])) 
+"""output167
+10"""
