@@ -6,6 +6,15 @@ threads, and then combine (merge) the sorted parts to produce the final sorted l
 The focus of the problem is not just sorting, but also demonstrating the correct use of threads, 
 synchronization, and merging of results."""
 
+"""To solve this problem, we first divide the original list into two equal halves. 
+Then, we create two separate threads, where one thread sorts the left half of the list and the other 
+thread sorts the right half. These two threads run independently and simultaneously. 
+Once both sorting threads finish their work, we wait for them using the join() method to make sure sorting 
+is complete. After that, we create a third thread whose job is to merge the two sorted halves into a
+single sorted list using a standard merge technique (similar to merge sort). Finally, 
+the merged list is returned as the fully sorted result. This approach clearly demonstrates 
+how multiple threads can cooperate to solve a single problem while maintaining correct execution order."""
+
 import threading
 
 def multithreaded_sort(arr):
