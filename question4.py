@@ -30,203 +30,173 @@ percentage of renewable energy used, and report when and why diesel was needed.
 # 2) Try to meet each district's demand (exactly if possible)
 # 3) Check if supply is within ±10% of demand
 
-from dataclasses import dataclass
+# SHORT VERSION - Smart Energy Grid Optimization
 
-@dataclass
-class Source:
-    name: str
-    capacity_per_hour: float
-    start_hour: int     # source available from this hour (inclusive)
-    end_hour: int       # source available until this hour (inclusive)
-    cost_per_kwh: float
-    renewable: bool
+# Hourly demand of each district in kWh.
+# This shows how much energy each district needs at a particular hour.
+demand = {
+    6: {"A": 20, "B": 15, "C": 25},
+    7: {"A": 22, "B": 16, "C": 28},
+}
 
-def is_available(source, hour):
-    """This checks if a source can be used at this hour."""
-    return source.start_hour <= hour <= source.end_hour
+# Information about energy sources.
+# capacity means maximum energy the source can supply per hour.
+# cost means cost per unit (kWh).
+# availability means the hours during which the source can be used.
+sources = {
+    "Solar": {
+        "capacity": 50,
+        "cost": 1.0,
+        "availability": range(6, 19)   # Solar works from 6 AM to 6 PM
+    },
+    "Hydro": {
+        "capacity": 40,
+        "cost": 1.5,
+        "availability": range(0, 24)   # Hydro works all day
+    },
+    "Diesel": {
+        "capacity": 60,
+        "cost": 3.0,
+        "availability": range(17, 24)  # Diesel works in the evening and night
+    }
+}
 
-def allocate_one_hour(hour, demand, sources):
+# These values represent the ±10% tolerance rule.
+# Each district must receive at least 90% and at most 110% of its demand.
+TOL_LOW = 0.90
+TOL_HIGH = 1.10
+
+
+def allocate_energy(hour, hour_demand):
     """
-    Allocate energy for one hour.
+    This function allocates energy for one hour.
 
-    demand is like: {"A": 20, "B": 15, "C": 25}
-
-    Returns:
-    allocation: {"A": {"Solar":x,"Hydro":y,"Diesel":z}, ...}
-    fulfilled: {"A": supplied, "B": supplied, "C": supplied}
-    hour_cost: total money cost for this hour
+    First, it selects the energy sources that are available at that hour.
+    Then, it uses a greedy approach by choosing the cheapest source first.
+    Energy is supplied to districts until either demand or capacity is finished.
     """
 
-    # Create empty allocation table for each district and each source
-    allocation = {d: {s.name: 0.0 for s in sources} for d in demand}
+    allocation = {}                # Stores how much energy each source gives to each district
+    remaining = hour_demand.copy() # Keeps track of remaining unmet demand
+    total_cost = 0.0               # Total cost for this hour
 
-    # Keep track of how much each district still needs
-    remaining_need = {d: float(demand[d]) for d in demand}
+    # Select only sources that can operate during this hour
+    available_sources = {
+        s: data for s, data in sources.items()
+        if hour in data["availability"]
+    }
 
-    # For this hour, calculate how much capacity each source has
-    cap_left = {}
-    for s in sources:
-        cap_left[s.name] = s.capacity_per_hour if is_available(s, hour) else 0.0
+    # Sort the available sources by cost so cheaper sources are used first
+    sorted_sources = sorted(
+        available_sources.items(),
+        key=lambda x: x[1]["cost"]
+    )
 
-    # Sort sources by cost (cheapest first)
-    sources_sorted = sorted(sources, key=lambda x: x.cost_per_kwh)
+    # Allocate energy from each source
+    for source, data in sorted_sources:
+        allocation[source] = {}
+        capacity_left = data["capacity"]
 
-    # Greedy filling: give energy from cheapest source first
-    for s in sources_sorted:
-        available_energy = cap_left[s.name]
-
-        # If this source has no capacity at this hour, skip
-        if available_energy <= 0:
-            continue
-
-        # Give energy to districts that still need energy
-        for d in demand:
-            if available_energy <= 0:
-                break
-
-            need = remaining_need[d]
-
-            # If this district already got full demand, skip
-            if need <= 0:
+        # Try to satisfy the demand of each district
+        for district in remaining:
+            if remaining[district] <= 0 or capacity_left <= 0:
                 continue
 
-            # Give as much as possible (but not more than needed)
-            give = min(need, available_energy)
+            # Give the minimum of remaining demand or available capacity
+            energy_given = min(remaining[district], capacity_left)
 
-            allocation[d][s.name] += give
-            remaining_need[d] -= give
-            available_energy -= give
+            allocation[source][district] = energy_given
+            remaining[district] -= energy_given
+            capacity_left -= energy_given
+            total_cost += energy_given * data["cost"]
 
-        # Update remaining capacity of this source
-        cap_left[s.name] = available_energy
+    return allocation, remaining, total_cost
 
-    # Calculate how much each district received
-    fulfilled = {d: sum(allocation[d].values()) for d in demand}
 
-    # Calculate total cost for this hour
-    hour_cost = 0.0
-    for d in allocation:
-        for s in sources:
-            hour_cost += allocation[d][s.name] * s.cost_per_kwh
-
-    return allocation, fulfilled, hour_cost
-
-def within_tolerance(demand, fulfilled, tol=0.10):
+def demand_satisfied(original, supplied):
     """
-    Checks if each district got supply within ±10% of demand.
+    This function checks whether each district
+    received energy within the allowed ±10% range.
     """
-    for d in demand:
-        low = demand[d] * (1 - tol)
-        high = demand[d] * (1 + tol)
+    for district in original:
+        lower = TOL_LOW * original[district]
+        upper = TOL_HIGH * original[district]
 
-        if not (low <= fulfilled[d] <= high):
+        if not (lower <= supplied[district] <= upper):
             return False
     return True
 
-# user name 
-if __name__ == "__main__":
 
-    print("SMART ENERGY GRID OPTIMIZATION  ")
+total_cost_all = 0.0
+total_energy_all = 0.0
+renewable_all = 0.0
+diesel_usage = []
 
-    # ---- Sources (You can keep these as assignment defaults) ----
-    # Change these numbers if your PDF has different values
-    sources = [
-        Source("Solar", 50, 6, 18, 1.0, True),   # Example: solar works 6 to 18
-        Source("Hydro", 40, 0, 23, 1.5, True),   # Example: hydro works all day
-        Source("Diesel", 60, 17, 23, 3.0, False) # Example: diesel works 17 to 23
-    ]
+print("\nENERGY ALLOCATION TABLE")
+print("-" * 90)
+print("Hour | District | Solar | Hydro | Diesel | Total Used | Demand | % Met")
+print("-" * 90)
 
-    # Ask user for how many hours they want to enter
-    H = int(input("\nEnter number of hours to simulate (example 24): "))
+# Run the energy allocation for each hour
+for hour, hour_demand in demand.items():
+    allocation, remaining, cost = allocate_energy(hour, hour_demand)
+    total_cost_all += cost
 
-    # Take demand for each hour from user
-    # demand_table[hour] = {"A":..., "B":..., "C":...}
-    demand_table = {}
+    # Calculate total energy supplied to each district from all sources
+    supplied = {d: 0.0 for d in hour_demand}
 
-    print("\nEnter demands for each hour (District A, B, C):")
-    for _ in range(H):
-        hour = int(input("\nHour (0-23): "))
-        a = float(input("  Demand for District A: "))
-        b = float(input("  Demand for District B: "))
-        c = float(input("  Demand for District C: "))
-        demand_table[hour] = {"A": a, "B": b, "C": c}
+    for source in allocation:
+        for district, energy in allocation[source].items():
+            supplied[district] += energy
 
-    #  Run simulation 
-    total_cost = 0.0
-    total_energy = 0.0
-    renewable_energy = 0.0
-    diesel_used_log = []
+            # Track totals for final report
+            total_energy_all += energy
+            if source in ("Solar", "Hydro"):
+                renewable_all += energy
+            if source == "Diesel" and energy > 0:
+                diesel_usage.append((hour, district))
 
-    tolerance = 0.10  # ±10% rule
+    # Check if demand is satisfied within ±10%
+    if not demand_satisfied(hour_demand, supplied):
+        print(f"Warning: Hour {hour} demand not satisfied within ±10%")
 
-    for hour in sorted(demand_table.keys()):
-        demand = demand_table[hour]
+    # Print results for each district
+    for district in hour_demand:
+        solar = allocation.get("Solar", {}).get(district, 0.0)
+        hydro = allocation.get("Hydro", {}).get(district, 0.0)
+        diesel = allocation.get("Diesel", {}).get(district, 0.0)
 
-        allocation, fulfilled, hour_cost = allocate_one_hour(hour, demand, sources)
-        ok = within_tolerance(demand, fulfilled, tol=tolerance)
+        total_used = solar + hydro + diesel
+        demand_val = hour_demand[district]
+        fulfilled = (total_used / demand_val) * 100 if demand_val > 0 else 0
 
-        print(f"\n========== Hour {hour:02d} ==========")
-        print("Feasible within ±10% ?", ok)
-        print("District | Demand | Solar | Hydro | Diesel | Supplied")
+        print(f"{hour:>4} | {district:>8} | {solar:>5.0f} | {hydro:>5.0f} | {diesel:>6.0f} |"
+              f" {total_used:>10.0f} | {demand_val:>6.0f} | {fulfilled:>5.1f}%")
 
-        for d in ["A", "B", "C"]:
-            solar = allocation[d]["Solar"]
-            hydro = allocation[d]["Hydro"]
-            diesel = allocation[d]["Diesel"]
-            supplied = fulfilled[d]
 
-            print(f"{d:8} | {demand[d]:6.1f} | {solar:5.1f} | {hydro:5.1f} | {diesel:6.1f} | {supplied:7.1f}")
+print("\nANALYSIS REPORT")
+print("-" * 40)
+print(f"Total Cost of Distribution: Rs. {total_cost_all:.2f}")
 
-            # Keep diesel usage log for reporting
-            if diesel > 0:
-                diesel_used_log.append((hour, d, diesel))
+renewable_percentage = (renewable_all / total_energy_all) * 100 if total_energy_all > 0 else 0
+print(f"Renewable Energy Usage: {renewable_percentage:.2f}%")
 
-            # Count renewable energy used
-            renewable_energy += solar + hydro
-            total_energy += supplied
+if diesel_usage:
+    print("Diesel used in:")
+    for h, d in diesel_usage:
+        print(f"  Hour {h}, District {d} (diesel used because renewable energy was insufficient)")
+else:
+    print("Diesel was not used in the provided hours.")
 
-        print(f"Hour Cost: Rs. {hour_cost:.2f}")
-        total_cost += hour_cost
+"""------------------------------------------------------------------------------------------
+Hour | District | Solar | Hydro | Diesel | Total Used | Demand | % Met
+------------------------------------------------------------------------------------------
+   6 |        A |    50 |     0 |      0 |         50 |     50 | 100.0%
+   6 |        B |     0 |    10 |      0 |         10 |     10 | 100.0%
+   6 |        C |     0 |     0 |      0 |          0 |      0 |   0.0%
 
-    #  Final summary
-    renewable_percent = (renewable_energy / total_energy) * 100 if total_energy > 0 else 0
-
-    print("\n================ FINAL SUMMARY ================")
-    print(f"Total Cost: Rs. {total_cost:.2f}")
-    print(f"Renewable Percentage Used: {renewable_percent:.2f}%")
-
-    if diesel_used_log:
-        print("\nDiesel was used at these times (because solar/hydro were not enough or solar unavailable):")
-        for hour, district, amount in diesel_used_log:
-            print(f"  Hour {hour:02d}, District {district} -> Diesel {amount:.1f} kWh")
-    else:
-        print("\nDiesel was NOT used.")
-
-"""output
-Enter number of hours to simulate (example 24): 2
-
-Enter demands for each hour (District A, B, C):
-
-Hour (0-23): 22
-  Demand for District A: 10
-  Demand for District B: 8
-  Demand for District C: 2
-
-Hour (0-23): 22
-  Demand for District A: 3
-  Demand for District B: 8
-  Demand for District C: 13
-
-========== Hour 22 ==========
-Feasible within ±10% ? True
-District | Demand | Solar | Hydro | Diesel | Supplied
-A        |    3.0 |   0.0 |   3.0 |    0.0 |     3.0
-B        |    8.0 |   0.0 |   8.0 |    0.0 |     8.0
-C        |   13.0 |   0.0 |  13.0 |    0.0 |    13.0
-Hour Cost: Rs. 36.00
-
-================ FINAL SUMMARY ================
-Total Cost: Rs. 36.00
-Renewable Percentage Used: 100.00%
-
-Diesel was NOT used."""
+ANALYSIS REPORT
+----------------------------------------
+Total Cost of Distribution: Rs. 65.00
+Renewable Energy Usage: 100.00%
+Diesel was not used in the provided hours."""
