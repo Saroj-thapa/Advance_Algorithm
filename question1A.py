@@ -137,3 +137,16 @@ answer = min_total_distance(sensors)
 # Show the final result
 print("\nMinimum total distance from hub to all sensors:")
 print(round(answer, 5))
+"""output 
+PS C:\Users\krita\OneDrive\Desktop\Advance Algorithm> & C:\Users\krita\AppData\Local\Programs\Python\Python313\python.exe "c:/Users/krita/OneDrive/Desktop/Advance Algorithm/question1A.py"
+Enter number of sensors: 2
+Enter coordinates of sensor 1:
+  x: 1
+  y: 1
+Enter coordinates of sensor 2:
+  x: 3
+  y: 3
+
+Minimum total distance from hub to all sensors:
+2.82843
+"""
