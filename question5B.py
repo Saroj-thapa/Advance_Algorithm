@@ -106,3 +106,9 @@ if __name__ == "__main__":
 
     sorted_list = multithreaded_sort(original_list)
     print("Sorted list  :", sorted_list)
+    
+"""output
+Original list: [7, 12, 19, 3, 18, 4, 2, 6, 15, 8]
+Thread 1 sorted left : [3, 7, 12, 18, 19]
+Thread 2 sorted right: [2, 4, 6, 8, 15]
+Thread 3 merged both halves successfully."""
